@@ -18,7 +18,8 @@ const AgentInterface = ({ incident }) => {
       // Simulate network delay for UI effect, then call real backend
       await new Promise(r => setTimeout(r, 600)); 
       
-      const res = await axios.post('http://localhost:8000/api/trigger', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://136.244.111.138:8000';
+      const res = await axios.post(`${apiUrl}/api/trigger`, {
         tower_id: incident.tower,
         event_type: 'Outage',
         logs: incident.logs
