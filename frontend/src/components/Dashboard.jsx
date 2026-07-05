@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, RadioTower, Clock, ChevronRight, Users, Signal } from 'lucide-react';
+import { AlertTriangle, RadioTower, Clock, ChevronRight, Users, Signal, Search, Activity, Trophy, ShieldCheck } from 'lucide-react';
 
 const TOWER_MAP = [
   { id: 'TOWER-42', x: 28, y: 40, status: 'critical' },
@@ -17,6 +17,13 @@ const TOWER_COLOR = {
 
 const Dashboard = ({ incidents, selectedIncident, onSelectIncident }) => {
   const [hovered, setHovered] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredIncidents = incidents.filter(inc => 
+    inc.tower.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    inc.logs.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    inc.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const edges = [];
   for (let i = 0; i < TOWER_MAP.length; i++) {
@@ -108,6 +115,43 @@ const Dashboard = ({ incidents, selectedIncident, onSelectIncident }) => {
         </div>
       </div>
 
+      {/* ── Predictive Insights & Gamification ── */}
+      <div className="flex gap-4 flex-shrink-0">
+        {/* Predictive Maintenance */}
+        <div className="glass-panel flex-1 p-3">
+          <h3 className="flex items-center gap-2 text-xs font-semibold mb-2 text-indigo-400">
+            <Activity className="w-3.5 h-3.5" /> Predictive Maintenance
+          </h3>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-[11px] p-1.5 rounded bg-white/5 border border-white/5">
+              <span className="text-slate-300"><span className="font-mono text-xs mr-1">TOWER-88</span> Battery Depletion Risk</span>
+              <span className="text-rose-400 font-bold">85%</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] p-1.5 rounded bg-white/5 border border-white/5">
+              <span className="text-slate-300"><span className="font-mono text-xs mr-1">TOWER-12</span> RF Cable Degradation</span>
+              <span className="text-amber-400 font-bold">62%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Gamification / SLA Leaderboard */}
+        <div className="glass-panel flex-1 p-3">
+          <h3 className="flex items-center gap-2 text-xs font-semibold mb-2 text-emerald-400">
+            <Trophy className="w-3.5 h-3.5" /> Crew & Vendor SLAs
+          </h3>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-[11px] p-1.5 rounded bg-white/5 border border-white/5">
+              <span className="text-slate-300 font-semibold">🏆 Team Alpha</span>
+              <span className="text-emerald-400 font-bold">12 Resolved</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] p-1.5 rounded bg-white/5 border border-white/5">
+              <span className="text-slate-300 font-semibold"><ShieldCheck className="w-3 h-3 inline mr-1 text-blue-400"/> VendorX</span>
+              <span className="text-blue-400 font-bold">100% On-Time</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Incident Queue ── */}
       <div className="glass-panel flex flex-col overflow-hidden flex-1 min-h-0">
         <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0"
@@ -116,13 +160,25 @@ const Dashboard = ({ incidents, selectedIncident, onSelectIncident }) => {
             <AlertTriangle className="w-4 h-4" style={{ color: '#F59E0B' }} />
             Incident Queue
           </h2>
-          <span className="badge badge-p0 text-[10px]">
-            {incidents.filter(i => i.severity === 'P0').length} Critical
-          </span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input 
+                type="text" 
+                placeholder="Search logs or towers..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-black/30 border border-white/10 rounded pl-7 pr-2 py-1 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors w-40 font-mono"
+              />
+            </div>
+            <span className="badge badge-p0 text-[10px]">
+              {filteredIncidents.filter(i => i.severity === 'P0').length} Critical
+            </span>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-3 space-y-2 flex-1">
-          {incidents.map(inc => {
+          {filteredIncidents.map(inc => {
             const isSelected = selectedIncident?.id === inc.id;
             const severityClass = inc.severity === 'P0' ? 'p0' : inc.severity === 'P1' ? 'p1' : 'p2';
 

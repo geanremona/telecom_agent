@@ -206,6 +206,7 @@ async def stream_agent(request: TriggerRequest, api_key: str = Depends(get_api_k
                 "decision": accumulated_state.get("decision", ""),
                 "severity": accumulated_state.get("severity", ""),
                 "predicted_cause": accumulated_state.get("predicted_cause", ""),
+                "top_causes": accumulated_state.get("top_causes", []),
                 "dispatch_plan": accumulated_state.get("dispatch_plan", []),
             })
 

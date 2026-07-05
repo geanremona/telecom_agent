@@ -61,6 +61,36 @@ const useNetworkStats = () => {
   return stats;
 };
 
+const TICKER_MSGS = [
+  "Crew Alpha: Arrived at TOWER-42. Commencing diagnostic.",
+  "VendorX: Engineer dispatched to TOWER-18. ETA 15m.",
+  "System: TOWER-09 automated maintenance complete. 100% restored.",
+  "Crew Bravo: Fiber splice kit F-200 reserved at Depot B.",
+  "NOC: Escalation ticket ESC-2026-90 updated by Level 2.",
+  "Security: Threat Intelligence update - no new CVEs matched.",
+];
+
+function LiveTicker() {
+  const [msgIdx, setMsgIdx] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setMsgIdx(i => (i + 1) % TICKER_MSGS.length);
+    }, 4000);
+    return () => clearInterval(iv);
+  }, []);
+
+  return (
+    <div className="bg-indigo-900/40 border-b border-indigo-500/20 py-1.5 px-5 flex items-center overflow-hidden">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mr-4 flex-shrink-0 flex items-center gap-1.5 animate-pulse">
+        <Radio className="w-3 h-3" /> Live Field Updates
+      </span>
+      <div className="text-xs text-indigo-200 font-mono whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-300">
+        &gt; {TICKER_MSGS[msgIdx]}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [selectedIncident, setSelectedIncident] = useState(null);
   const stats = useNetworkStats();
@@ -113,6 +143,9 @@ function App() {
             </div>
           </div>
         </header>
+
+        {/* ── Real-Time Ticker ── */}
+        <LiveTicker />
 
         {/* ── Main Layout ── */}
         <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">

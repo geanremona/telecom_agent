@@ -288,10 +288,53 @@ const AgentInterface = ({ incident }) => {
                   {finalResult.decision === 'escalate' ? '🔴 Escalation Path Executed' : '🟢 Dispatch Path Executed'}
                 </div>
                 <div className="text-[11px] opacity-70 mt-0.5">
-                  Severity: {finalResult.severity} &nbsp;·&nbsp; Root Cause: {finalResult.predicted_cause}
+                  Severity: {finalResult.severity} &nbsp;·&nbsp; Primary Cause: {finalResult.predicted_cause}
                 </div>
               </div>
             </div>
+
+            {/* XAI: Explainable AI & Top 3 Causes */}
+            {finalResult.top_causes && finalResult.top_causes.length > 0 && (
+              <div className="p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5">
+                <div className="flex items-center gap-2 mb-2 text-indigo-400 font-semibold text-xs tracking-wider uppercase">
+                  <Bot className="w-3.5 h-3.5" /> Explainable AI (XAI) Predictions
+                </div>
+                <div className="space-y-2">
+                  {finalResult.top_causes.map((tc, idx) => (
+                    <div key={idx} className="flex flex-col text-xs">
+                      <div className="flex justify-between items-center text-slate-300">
+                        <span className="font-medium text-[13px]">{idx + 1}. {tc.cause}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${idx === 0 ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-400'}`}>
+                          {tc.prob}%
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 ml-3 border-l border-slate-700 pl-2">
+                        ↳ {tc.xai}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Dispatch Sequence */}
+            {finalResult.decision === 'dispatch' && finalResult.dispatch_plan && finalResult.dispatch_plan.length > 0 && (
+              <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-xs tracking-wider uppercase">
+                  <Truck className="w-3.5 h-3.5" /> Optimized Dispatch Route
+                </div>
+                <div className="relative pl-4 space-y-3 before:content-[''] before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-px before:bg-emerald-500/20">
+                  {finalResult.dispatch_plan.map((step, idx) => (
+                    <div key={idx} className="relative">
+                      <div className="absolute -left-4 top-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-slate-900" />
+                      <div className="text-[11px] font-mono text-emerald-300 mb-0.5">Step {idx + 1}: {step.action}</div>
+                      <div className="text-xs text-slate-300">{step.details}</div>
+                      {step.eta && <div className="text-[10px] text-slate-500 mt-0.5">ETA: {step.eta}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Citations */}
             <DocumentCitations citations={finalResult.citations} />
