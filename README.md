@@ -1,6 +1,9 @@
-# 🌐 Nexus Network Ops Agent
+# 🌐 Nexus Network Ops — Enterprise AI Agent 📡🤖
+[![Hackathon MVP](https://img.shields.io/badge/Status-Hackathon_MVP-success.svg)]()
 
-> **Enterprise Telecom AI Agent** — A production-grade, multi-step agentic workflow for Network Operations Centers (NOC) built on LangGraph, FastAPI, and React.
+> A production-grade, AI-driven autonomous agent built for telecommunications Network Operations Centers (NOC). 
+
+![Nexus Dashboard Overview](demo_assets/dashboard_overview.png) built on LangGraph, FastAPI, and React.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -11,15 +14,18 @@
 
 ---
 
-## 📸 Demo
-
-![Nexus Agent Demo](./demo.webp)
-
----
-
 ## 🧠 What Makes This a True Agent?
 
-This is **not** a simple RAG chatbot. Nexus executes a stateful, 7-node **LangGraph** workflow with conditional branching, multi-step document retrieval, and autonomous decision-making — simulating how a real NOC AI platform would operate.
+## 🎯 The Problem & Solution
+
+### The Problem
+Field crews spend days diagnosing outages due to fragmented logs, leading to SLA penalties and inefficient dispatch.
+
+### The Solution: TSLAM-4B Integration
+Nexus Network Ops Agent ingests live telemetry, maintenance logs, and vendor SLAs. It leverages the **TSLAM-4B Architecture**—a cloud-based inference pipeline using **Groq LLM API**, a **ChromaDB RAG** for historical incident grounding, and a **Neo4j Knowledge Graph** to map topology. It doesn't just answer questions; it analyzes physical hardware metrics, detects zero-day threats, identifies systemic failures, and uses **Google OR-Tools** to dispatch crews via mathematically optimized geographical routes.
+
+### Live Agent Execution Demo
+![Nexus TSLAM Execution Demo](demo_assets/tslam_demo_video.webp)
 
 | Capability | Implementation |
 |---|---|
