@@ -23,13 +23,11 @@ This is **not** a simple RAG chatbot. Nexus executes a stateful, 7-node **LangGr
 
 | Capability | Implementation |
 |---|---|
+| **TSLAM-4B Driven AI Engine** | Integrates Groq LLM Cloud Inference for 0-latency reasoning without overloading the local Vultr server. |
+| **Neo4j Knowledge Graph** | Maps topology and queries historical outage frequency using Cypher to dynamically route escalation logic. |
+| **ChromaDB RAG Pipeline** | Contextualizes current incidents by embedding and semantically searching historical outage logs to prevent LLM hallucinations. |
+| **Dynamic Dispatch Optimization** | Uses Google OR-Tools to solve the Traveling Salesperson Problem, calculating the mathematically optimal geospatial route for field crews. |
 | **RLHF Self-Learning** | Learns from human NOC operators via Approve/Dismiss UI feedback, dynamically adjusting its internal threshold confidence weights. |
-| **Explainable AI (XAI)** | RCA node outputs the top 3 probabilistic hypotheses along with explicit XAI reasoning on why it made the prediction. |
-| **Zero-Day Cyber Detection** | Dynamic graph routing detects unknown anomalies and lateral movement, querying a Threat Intel database. |
-| **Dynamic Dispatch Optimization** | Calculates optimized geographical sequence routes for field crews with estimated ETAs. |
-| **Edge Computing Ready** | Designed to allow offline fallback execution via a localized SLM on Raspberry Pi at the tower site. |
-| **Retrieves > 1 time** | First retrieval: incident history; Second retrieval: targeted SLA contract document after RCA |
-| **Calls specialized tools** | 6 named tool calls: `query_incidents`, `get_sla_document`, `check_inventory`, `find_available_crews`, `escalate_to_vendor`, `query_threat_intel` |
 | **Real-time streaming** | SSE (Server-Sent Events) streams each node's reasoning live to the frontend |
 
 ---
@@ -52,9 +50,9 @@ flowchart TD
     
     Triage["🔎 Node 1: Triage<br/>Classify P0/P1/P2 Severity"] --> Retrieve1
 
-    Retrieve1["📂 Node 2: Retrieve Incidents<br/><b>TOOL:</b> query_incidents(tower_id)"]:::retrieval --> RCA
+    Retrieve1["📂 Node 2: Retrieve Context<br/><b>ChromaDB RAG:</b> Semantic Search of History"]:::retrieval --> RCA
 
-    RCA["🧠 Node 3: Root Cause Analysis<br/>Outputs Top 3 Causes + XAI Reasoning"] --> RCACondition
+    RCA["🧠 Node 3: Root Cause Analysis<br/><b>Groq Cloud LLM</b> outputs Top 3 Causes + XAI"] --> RCACondition
 
     RCACondition{"❓ Node 3.5: Unknown Anomaly?"}:::decision
     RCACondition -->|"Yes"| ThreatAnalysis
@@ -64,12 +62,12 @@ flowchart TD
 
     Retrieve2["📄 Node 4: Retrieve SLA Document<br/><b>TOOL:</b> get_sla_document(root_cause)"]:::retrieval --> Decision
 
-    Decision{"⚡ Node 5: Decision<br/>SLA breach risk + repeat failure?"}:::decision
+    Decision{"⚡ Node 5: Decision<br/><b>Neo4j Cypher Query:</b><br/>Repeat Failure?"}:::decision
 
     Decision -->|"✅ No breach risk"| Dispatch
     Decision -->|"🚨 High risk + repeat"| Escalate
 
-    Dispatch["🚛 Node 6A: Dispatch Path<br/><b>TOOL:</b> check_inventory(part)<br/><b>TOOL:</b> find_available_crews(cert)<br/>Outputs Optimized Route Sequence"]:::dispatch --> Report
+    Dispatch["🚛 Node 6A: Dispatch Path<br/><b>Google OR-Tools</b><br/>Calculates Optimized TSP Route"]:::dispatch --> Report
 
     Escalate["🚨 Node 6B: Escalation Path<br/><b>TOOL:</b> escalate_to_vendor(vendor, ticket)<br/><b>TOOL:</b> find_available_crews(cert)"]:::escalate --> Report
 
