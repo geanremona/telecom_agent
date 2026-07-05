@@ -34,9 +34,9 @@ def get_api_key(api_key_header: str = Security(api_key_header)):
 # Security: Input Validation
 class TriggerRequest(BaseModel):
     incident_id: str = Field(default="INC-2026-89", pattern=r"^INC-\d{4}-\d{2,4}$", max_length=20)
-    tower_id: str = Field(pattern=r"^TOWER-\d{2,4}$", max_length=20)
-    event_type: str = Field(max_length=50)
-    logs: str = Field(max_length=2000)
+    tower_id: str = Field(pattern=r"^TOWER-[A-Z0-9-]{2,10}$", max_length=20)
+    event_type: str = Field(max_length=150)
+    logs: str = Field(max_length=5000)
 
 class FeedbackRequest(BaseModel):
     incident_id: str = Field(max_length=20)
