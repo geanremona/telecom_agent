@@ -75,12 +75,19 @@ async def stream_agent(request: TriggerRequest):
         yield sse_event("start", {"message": "Agent initializing…", "total_nodes": len(NODE_META)})
         await asyncio.sleep(0.1)
 
+        # Accumulate full state across all streaming chunks — avoids running the
+        # workflow a second time via invoke() which caused crashes for some towers.
+        accumulated_state: Dict[str, Any] = {**initial_state}
+
         try:
             # LangGraph stream yields {node_name: output_dict} dicts
             for chunk in agent_app.stream(initial_state):
                 for node_name, node_output in chunk.items():
                     if node_name == "__end__":
                         continue
+
+                    # Merge this node's output into the running state
+                    accumulated_state.update(node_output)
 
                     meta = NODE_META.get(node_name, {"label": node_name, "icon": "🔷"})
                     await asyncio.sleep(0.5)
@@ -165,15 +172,14 @@ async def stream_agent(request: TriggerRequest):
                     }
                     yield sse_event("node_complete", event_payload)
 
-            # Final invoke for complete report and citations
-            final_state = agent_app.invoke(initial_state)
+            # Emit complete event using the accumulated state — no second invoke() needed
             yield sse_event("complete", {
-                "report": final_state.get("report", ""),
-                "citations": final_state.get("citations", []),
-                "decision": final_state.get("decision", ""),
-                "severity": final_state.get("severity", ""),
-                "predicted_cause": final_state.get("predicted_cause", ""),
-                "dispatch_plan": final_state.get("dispatch_plan", []),
+                "report": accumulated_state.get("report", ""),
+                "citations": accumulated_state.get("citations", []),
+                "decision": accumulated_state.get("decision", ""),
+                "severity": accumulated_state.get("severity", ""),
+                "predicted_cause": accumulated_state.get("predicted_cause", ""),
+                "dispatch_plan": accumulated_state.get("dispatch_plan", []),
             })
 
         except Exception as e:
