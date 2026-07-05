@@ -13,9 +13,9 @@ To provide zero-latency root cause prediction and automated failover capabilitie
 ## Software Architecture
 
 ### 1. The Local AI Agent (Inference Engine)
-Instead of relying on the cloud-based LLM, the edge node runs a heavily quantized, task-specific Small Language Model (SLM) or a trained Random Forest classifier.
-- **Tech Stack:** Python, ONNX Runtime, FastAPI.
-- **Responsibility:** Ingest local syslog streams from the rectifier and switch. Parse the symptoms and output the top 3 predicted causes locally.
+Instead of relying on the central Groq-powered TSLAM-4B cloud LLM (which requires backhaul internet), the edge node runs a heavily quantized, task-specific Small Language Model (SLM) such as Llama-3-8B-Q4 or a trained Random Forest classifier.
+- **Tech Stack:** Python, ONNX Runtime, FastAPI, Local ChromaDB.
+- **Responsibility:** Ingest local syslog streams from the rectifier and switch. Perform local RAG against downloaded historical logs, parse the symptoms, and output the top 3 predicted causes locally.
 
 ### 2. Edge-to-Cloud Sync (MQTT)
 The central NOC (this dashboard) needs to know what the Edge Agent is doing.
@@ -32,8 +32,8 @@ The primary benefit of the Edge Agent is taking action without the NOC.
 - **Action:** The Edge Agent issues a local CLI command to the power controller to load-shed non-critical sectors (e.g., shutting down 5G mmWave antennas to preserve battery life for the core 4G macro cells).
 
 ## Deployment Flow
-1. **Model Distillation:** The central RLHF-trained LangGraph agent distills its knowledge base into a lightweight rule-set/model.
-2. **OTA Update:** The NOC pushes this updated `.onnx` model to all Raspberry Pi nodes over-the-air.
+1. **Model Distillation:** The central TSLAM-4B agent distills its knowledge base and RAG embeddings into a lightweight offline rule-set/model.
+2. **OTA Update:** The NOC pushes this updated `.onnx` model and ChromaDB snapshot to all Raspberry Pi nodes over-the-air.
 3. **Execution:** The Pi runs as a `systemd` service, completely isolated from network latency.
 
 > [!TIP]
