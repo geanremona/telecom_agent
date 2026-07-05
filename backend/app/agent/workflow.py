@@ -1,8 +1,13 @@
 import datetime
+import json
 from typing import TypedDict, Annotated, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 import app.database.mock_data as db
 from app.agent.knowledge_base import get_sensitivity
+from app.llm.inference import generate_telecom_response
+from app.database.neo4j_client import kg_client
+from app.rag.vector_store import rag_store
+from app.agent.dispatch_optimizer import optimize_dispatch_route
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AGENT STATE
@@ -117,78 +122,57 @@ def retrieve_incidents_node(state: AgentState) -> dict:
 
 
 def rca_node(state: AgentState) -> dict:
-    incidents = state.get("incidents", [])
-    logs = state["event"].get("logs", "").lower()
-    pattern = state.get("incident_pattern", "")
+    logs = state["event"].get("logs", "")
+    
+    # 1. RAG Retrieval from ChromaDB
+    rag_context = rag_store.retrieve_context(logs, n_results=2)
+    state["messages"].append(f"[RAG] Retrieved context from ChromaDB: {rag_context.splitlines()[0] if rag_context else 'None'}")
 
-    predicted_cause = "Unknown"
-    confidence = "Low (15%)"
-    reasoning = "Insufficient data for confident RCA."
-    top_causes = []
+    # 2. Build the LLM Prompt
+    prompt = f"""
+    Analyze the following telecom incident to determine the root cause.
+    
+    Current Logs: {logs}
+    
+    {rag_context}
+    
+    Return your analysis as a valid JSON array of objects representing the top 3 predicted causes.
+    Each object MUST have the keys: "cause" (string), "confidence" (integer 0-100), and "reasoning" (string).
+    If it is a cyber security issue like unauthorized access or lateral movement, output "Unknown Anomaly" as the top cause.
+    """
 
-    # Use RLHF Sensitivities
-    rect_sens = get_sensitivity("Faulty rectifier")
-    ant_sens = get_sensitivity("Antenna misalignment")
-    fib_sens = get_sensitivity("Physical fiber damage (excavation)")
+    # 3. Call Cloud LLM
+    response_text = generate_telecom_response(prompt)
+    
+    # 4. Parse LLM Output
+    try:
+        # Strip markdown formatting if the LLM wrapped it
+        json_str = response_text.strip().removeprefix('```json').removesuffix('```').strip()
+        predictions = json.loads(json_str)
+        top_causes = []
+        for p in predictions:
+            top_causes.append({
+                "cause": p.get("cause", "Unknown"),
+                "prob": p.get("confidence", 0),
+                "xai": p.get("reasoning", "")
+            })
+            
+        predicted_cause = top_causes[0]["cause"]
+        confidence_val = top_causes[0]["prob"]
+        confidence = f"High ({confidence_val}%)" if confidence_val > 80 else f"Medium ({confidence_val}%)"
+        reasoning = top_causes[0]["xai"]
+    except Exception as e:
+        print(f"[ERROR] Failed to parse LLM JSON: {e}\nResponse: {response_text}")
+        predicted_cause = "Unknown"
+        confidence = "Low (0%)"
+        reasoning = "LLM failed to produce valid JSON."
+        top_causes = [{"cause": "Unknown", "prob": 0, "xai": "Parsing error"}]
 
-    if "3/" in pattern or "pattern detected" in pattern.lower():
-        # Strong historical evidence
-        most_common_cause = max(
-            set(i["root_cause"] for i in incidents),
-            key=lambda x: sum(1 for i in incidents if i["root_cause"] == x)
-        )
-        predicted_cause = most_common_cause
-        confidence = "High (92%)"
-        reasoning = (
-            f"Strong recurrence pattern confirms '{most_common_cause}' as the root cause. "
-            f"Evidence from {len(incidents)} historical incidents at this tower. "
-        )
-        top_causes = [
-            {"cause": most_common_cause, "prob": 92, "xai": f"Dominant historical pattern ({len(incidents)} matches)"},
-            {"cause": "Power fluctuation", "prob": 5, "xai": "Secondary effect of hardware aging"},
-            {"cause": "Unknown anomaly", "prob": 3, "xai": "Residual probability"}
-        ]
-    elif ("voltage" in logs or "battery" in logs or "rectifier" in logs) and rect_sens < 0.7:
-        predicted_cause = "Faulty rectifier"
-        prob = int((1-rect_sens)*100)
-        confidence = f"Medium ({prob}%)"
-        reasoning = f"Symptom matching: 'voltage drop' and 'rectifier alarm' strongly correlate with rectifier failure. The model's baseline confidence was adjusted by human RLHF feedback to {prob}%."
-        top_causes = [
-            {"cause": "Faulty rectifier", "prob": prob, "xai": "Symptom exact match + RLHF weighting"},
-            {"cause": "Depleted battery cells", "prob": int(prob*0.4), "xai": "Common secondary symptom"},
-            {"cause": "Grid power failure", "prob": int(prob*0.1), "xai": "External factor check required"}
-        ]
-    elif ("signal" in logs or "antenna" in logs or "fluctuation" in logs) and ant_sens < 0.7:
-        predicted_cause = "Antenna misalignment"
-        prob = int((1-ant_sens)*100)
-        confidence = f"Medium ({prob}%)"
-        reasoning = f"XAI Insight: High packet loss and bearing deviation explicitly point to physical antenna misalignment rather than software failure. RLHF Confidence: {prob}%."
-        top_causes = [
-            {"cause": "Antenna misalignment", "prob": prob, "xai": "Bearing deviation logs detected"},
-            {"cause": "RF cable degradation", "prob": int(prob*0.3), "xai": "Possible water ingress"},
-            {"cause": "Interference", "prob": 12, "xai": "External RF interference"}
-        ]
-    elif ("fiber" in logs or "backhaul" in logs) and fib_sens < 0.8:
-        predicted_cause = "Physical fiber damage (excavation)"
-        prob = int((1-fib_sens)*100 + 10)
-        confidence = f"High ({prob}%)"
-        reasoning = "XAI Insight: Complete backhaul loss combined with zero optical receive power indicates physical cable severance, likely due to external excavation."
-        top_causes = [
-            {"cause": "Physical fiber damage", "prob": prob, "xai": "Zero optical receive power"},
-            {"cause": "Transceiver failure", "prob": 8, "xai": "Hardware fault at local port"},
-            {"cause": "Core router outage", "prob": 2, "xai": "Upstream failure"}
-        ]
-    elif "lateral movement" in logs or "unauthorized" in logs:
+    # Special handling for Zero-Day routing
+    if predicted_cause == "Unknown Anomaly" or "lateral movement" in logs.lower() or "unauthorized" in logs.lower():
         predicted_cause = "Unknown Anomaly"
         confidence = "Low (10%)"
         reasoning = "Unrecognized anomaly detected in logs. Routing to Threat Analysis."
-        top_causes = [
-            {"cause": "Unknown Anomaly", "prob": 10, "xai": "Unrecognized signature"},
-        ]
-    else:
-        top_causes = [
-            {"cause": "Unknown", "prob": 15, "xai": "Insufficient data"}
-        ]
 
     state["messages"].append(f"[RCA] Root cause: '{predicted_cause}' — Confidence: {confidence}. {reasoning}")
     return {
@@ -289,15 +273,22 @@ def decision_node(state: AgentState) -> dict:
     predicted_cause = state.get("predicted_cause", "Unknown")
     sla_breach_risk = state.get("sla_breach_risk", False)
     sla_doc = state.get("sla_doc")
-    incidents = state.get("incidents", [])
+    tower_id = state.get("event", {}).get("tower_id", "UNKNOWN")
+
+    # Use Neo4j Knowledge Graph to check historical outage frequency
+    recent_outage_count = kg_client.check_outage_frequency(tower_id, days=7)
+    
+    # Fallback to in-memory incidents if Neo4j is offline or empty
+    if recent_outage_count == 0:
+        recent_outage_count = len(state.get("incidents", []))
 
     # DECISION LOGIC
     # Escalate if: SLA breach is imminent AND this is a known repeat failure
-    if sla_breach_risk and len(incidents) >= 3 and predicted_cause != "Unknown":
+    if sla_breach_risk and recent_outage_count >= 3 and predicted_cause != "Unknown":
         decision = "escalate"
         reasoning = (
             f"DECISION: ESCALATE. Basis: (1) SLA breach risk is HIGH — response window ≤ 4h. "
-            f"(2) This is a REPEAT FAILURE — {len(incidents)} prior incidents with the same root cause. "
+            f"(2) Neo4j Knowledge Graph flags this as a REPEAT FAILURE — {recent_outage_count} prior incidents in 7 days. "
             f"(3) Contract clause triggers mandatory escalation path. "
             f"Standard dispatch is insufficient; invoking vendor emergency escalation."
         )
@@ -348,51 +339,11 @@ def dispatch_node(state: AgentState) -> dict:
     crews = crew_result["output"]
     crew = crews[0] if crews else {"name": "No crew available", "available_from": "TBD"}
 
-    # Simulate Dynamic Dispatch Route Optimization
-    plan = []
-    step = 1
-    
-    # Step 1: Dispatch to Depot/Warehouse
-    plan.append({
-        "step": step, "action": f"Crew {crew['name']} dispatched from Base Station",
-        "owner": crew['name'], "eta": "Immediate",
-        "status": "✅ En Route", "detail": "Calculating optimal route avoiding highway congestion."
-    })
-    step += 1
-
-    # Step 2: Parts pickup
-    if inv_data.get("stock", 0) > 0:
-        plan.append({
-            "step": step, "action": f"Pick up part: {part_name}",
-            "owner": "Depot Ops", "eta": "15 mins",
-            "status": "✅ Scheduled", "detail": f"Part verified in stock (Qty: {inv_data.get('stock')}). Ready at loading dock B."
-        })
-    else:
-        plan.append({
-            "step": step, "action": f"Source substitute part for {part_name}",
-            "owner": "Procurement", "eta": "2 hours",
-            "status": "❌ Delayed", "detail": f"Part out of stock. Sourcing from secondary local warehouse."
-        })
-    step += 1
-
-    # Step 3: Travel to Tower
-    tower = state.get("event", {}).get("tower_id", "TOWER-UNKNOWN")
-    plan.append({
-        "step": step, "action": f"Navigate to {tower}",
-        "owner": crew['name'], "eta": "45 mins",
-        "status": "⏳ Pending", "detail": "Optimal route calculated via Route 42. Traffic: Light."
-    })
-    step += 1
-
-    # Step 4: Site restoration
-    plan.append({
-        "step": step, "action": "Execute repair and restore service",
-        "owner": crew['name'], "eta": "Est. 2.5h from arrival",
-        "status": "⏳ Pending", "detail": "Crew will perform replacement, run diagnostics, and confirm signal restoration."
-    })
+    # Use OR-Tools to dynamically calculate the optimal dispatch sequence
+    plan = optimize_dispatch_route()
 
     state["messages"].append(
-        f"[DISPATCH] Generated {len(plan)}-step dispatch plan. "
+        f"[DISPATCH] Generated {len(plan)}-step dispatch plan using OR-Tools routing. "
         f"Crew: {crew['name']}. Parts: {'In Stock' if inv_data.get('stock', 0) > 0 else 'Substitute/Ordered'}."
     )
     return {

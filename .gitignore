@@ -3,6 +3,8 @@ backend/.venv/
 backend/__pycache__/
 backend/*.pyc
 backend/.env
+backend/app/rag/chroma_data/
+backend/backend.log
 
 # Node
 node_modules/
