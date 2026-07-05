@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import AgentInterface from './components/AgentInterface';
-import { Activity, Cpu, Shield, Wifi, AlertTriangle, TrendingDown } from 'lucide-react';
+import { Activity, Cpu, Shield, Wifi, AlertTriangle, TrendingDown, Radio } from 'lucide-react';
 
 const INCIDENTS = [
   {
@@ -39,25 +39,14 @@ const INCIDENTS = [
   },
 ];
 
-// Live stats that tick over time for drama
 const useNetworkStats = () => {
-  const [stats, setStats] = useState({
-    towers: 1847,
-    active_alerts: 3,
-    uptime: 99.3,
-    affected_users: 24600,
-  });
-
+  const [stats, setStats] = useState({ towers: 1847, alerts: 3, uptime: 99.3, affected: 24600 });
   useEffect(() => {
     const iv = setInterval(() => {
-      setStats(s => ({
-        ...s,
-        affected_users: s.affected_users + Math.floor((Math.random() - 0.5) * 40),
-      }));
-    }, 3000);
+      setStats(s => ({ ...s, affected: Math.max(0, s.affected + Math.floor((Math.random() - 0.5) * 60)) }));
+    }, 3500);
     return () => clearInterval(iv);
   }, []);
-
   return stats;
 };
 
@@ -66,67 +55,80 @@ function App() {
   const stats = useNetworkStats();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-cyan-500/30 font-sans flex flex-col">
+    <>
+      {/* Background scene */}
+      <div className="app-bg">
+        <div className="app-bg-grid" />
+      </div>
 
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
-              <Activity className="w-5 h-5 text-cyan-400" />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        {/* ── Header ── */}
+        <header className="app-header">
+          <div className="max-w-screen-2xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+
+            {/* Logo */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="logo-icon">
+                <Activity className="w-5 h-5 text-[#00D4FF]" />
+              </div>
+              <div className="leading-none">
+                <div className="logo-text text-base font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  Nexus Network Ops
+                </div>
+                <div className="text-[9px] font-medium tracking-widest uppercase mt-0.5" style={{ color: 'var(--text-muted)', fontFamily: "'Space Grotesk', sans-serif" }}>
+                  Enterprise AI Agent · Telecom
+                </div>
+              </div>
             </div>
-            <div>
-              <h1 className="text-base font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent leading-none">
-                Nexus Network Ops
-              </h1>
-              <p className="text-[9px] text-slate-500 leading-none mt-0.5 uppercase tracking-wider">Enterprise AI Agent · Telecom</p>
+
+            {/* Live stats */}
+            <div className="hidden lg:flex items-center gap-2">
+              <StatPill icon={<Wifi className="w-3 h-3" />} label="Towers" value={stats.towers.toLocaleString()} color="#00D4FF" />
+              <StatPill icon={<AlertTriangle className="w-3 h-3" />} label="Alerts" value={String(stats.alerts)} color="#F59E0B" />
+              <StatPill icon={<TrendingDown className="w-3 h-3" />} label="Affected" value={stats.affected.toLocaleString()} color="#F43F5E" />
+              <StatPill icon={<Shield className="w-3 h-3" />} label="Uptime" value={`${stats.uptime}%`} color="#10B981" />
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="status-live">
+                <span className="dot" />
+                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11 }}>All Systems Nominal</span>
+              </div>
+              <div className="stat-pill" style={{ color: 'var(--indigo)', borderColor: 'rgba(129,140,248,0.2)', background: 'rgba(129,140,248,0.06)' }}>
+                <Cpu className="w-3 h-3" />
+                <span>Agent v2.0</span>
+              </div>
             </div>
           </div>
+        </header>
 
-          {/* Live stats bar */}
-          <div className="hidden md:flex items-center gap-2 text-xs">
-            <StatPill icon={<Wifi className="w-3 h-3" />} label="Towers Online" value={`${stats.towers.toLocaleString()}`} color="text-emerald-400" />
-            <StatPill icon={<AlertTriangle className="w-3 h-3" />} label="Active Alerts" value={String(stats.active_alerts)} color="text-amber-400" />
-            <StatPill icon={<TrendingDown className="w-3 h-3" />} label="Affected Users" value={stats.affected_users.toLocaleString()} color="text-red-400" />
-            <StatPill icon={<Shield className="w-3 h-3" />} label="Network Uptime" value={`${stats.uptime}%`} color="text-cyan-400" />
+        {/* ── Main Layout ── */}
+        <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="lg:col-span-4 min-h-0">
+            <Dashboard
+              incidents={INCIDENTS}
+              selectedIncident={selectedIncident}
+              onSelectIncident={setSelectedIncident}
+            />
           </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/60 border border-slate-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-slate-400">System Nominal</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
-              <Cpu className="w-3 h-3" />
-              <span>Agent v2.0 Active</span>
-            </div>
+          <div className="lg:col-span-8 h-[calc(100vh-7.5rem)]">
+            <AgentInterface incident={selectedIncident} />
           </div>
-        </div>
-      </header>
-
-      {/* Main layout */}
-      <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
-          <Dashboard
-            incidents={INCIDENTS}
-            selectedIncident={selectedIncident}
-            onSelectIncident={setSelectedIncident}
-          />
-        </div>
-        <div className="lg:col-span-8 h-[calc(100vh-8rem)]">
-          <AgentInterface incident={selectedIncident} />
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
 
-const StatPill = ({ icon, label, value, color }) => (
-  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/60 border border-slate-700/50">
-    <span className={color}>{icon}</span>
-    <span className="text-slate-500">{label}:</span>
-    <span className={`font-semibold ${color}`}>{value}</span>
-  </div>
-);
+function StatPill({ icon, label, value, color }) {
+  return (
+    <div className="stat-pill">
+      <span style={{ color }}>{icon}</span>
+      <span style={{ color: 'var(--text-muted)' }}>{label}:</span>
+      <span style={{ color, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>{value}</span>
+    </div>
+  );
+}
 
 export default App;

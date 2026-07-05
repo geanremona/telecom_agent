@@ -1,74 +1,71 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Play, Bot, FileText, CheckCircle2, Loader2, Sparkles,
-  Zap, GitBranch, AlertTriangle, Truck, ArrowRight
+  Play, Bot, FileText, Loader2, Sparkles, Zap, GitBranch,
+  AlertTriangle, Truck, CheckCircle2, ArrowRight, RefreshCw
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import ToolCallCard from './ToolCallCard';
 import DocumentCitations from './DocumentCitations';
 
-const NODE_ICONS = {
-  triage: Zap,
-  retrieve_incidents: FileText,
-  rca: Bot,
-  retrieve_sla: FileText,
-  decision: GitBranch,
-  dispatch: Truck,
-  escalate: AlertTriangle,
-  report: CheckCircle2,
-};
-
-const NODE_COLORS = {
-  triage:             'border-blue-500/40 bg-blue-500/10 text-blue-300',
-  retrieve_incidents: 'border-purple-500/40 bg-purple-500/10 text-purple-300',
-  rca:                'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
-  retrieve_sla:       'border-purple-500/40 bg-purple-500/10 text-purple-300',
-  decision:           'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  dispatch:           'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  escalate:           'border-red-500/40 bg-red-500/10 text-red-300',
-  report:             'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
+const NODE_META = {
+  triage:             { icon: '🔎', label: 'Triage & Severity Classification',  Icon: Zap },
+  retrieve_incidents: { icon: '📂', label: 'Retrieve Incident History',          Icon: FileText },
+  rca:                { icon: '🧠', label: 'Root Cause Analysis',                Icon: Bot },
+  retrieve_sla:       { icon: '📄', label: 'Retrieve SLA Contract Document',     Icon: FileText },
+  decision:           { icon: '⚡', label: 'Agent Decision & Path Selection',    Icon: GitBranch },
+  dispatch:           { icon: '🚛', label: 'Dispatch Planning',                  Icon: Truck },
+  escalate:           { icon: '🚨', label: 'Vendor Escalation',                  Icon: AlertTriangle },
+  report:             { icon: '📋', label: 'Generate Priority Action Report',    Icon: CheckCircle2 },
 };
 
 const AgentStep = ({ step, index }) => {
-  const Icon = NODE_ICONS[step.node] || Bot;
-  const colorClass = NODE_COLORS[step.node] || 'border-slate-500/40 bg-slate-500/10 text-slate-300';
+  const meta = NODE_META[step.node] || { icon: '🔷', label: step.node, Icon: Bot };
+  const { Icon } = meta;
 
   return (
     <div
-      className={`rounded-xl border p-4 space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-400 ${colorClass}`}
-      style={{ animationDelay: `${index * 50}ms` }}
+      className={`step-card node-${step.node}`}
+      style={{ animationDelay: `${index * 40}ms` }}
     >
-      {/* Node Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-base">{step.icon}</span>
-        <Icon className="w-4 h-4 flex-shrink-0" />
-        <span className="font-semibold text-sm">{step.label}</span>
+      {/* Node header */}
+      <div className="flex items-center gap-2.5 mb-2">
+        <span className="text-sm leading-none">{step.icon || meta.icon}</span>
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ opacity: 0.7 }} />
+        <span className="text-xs font-semibold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif", color: 'var(--text-primary)' }}>
+          {step.label || meta.label}
+        </span>
       </div>
 
       {/* Agent message */}
       {step.message && (
-        <p className="text-xs leading-relaxed opacity-80 pl-1 border-l-2 border-current/30 ml-1">
+        <p className="text-xs leading-relaxed mb-2 pl-2 border-l"
+           style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }}>
           {step.message.replace(/^\[.*?\]\s*/, '')}
         </p>
       )}
 
-      {/* Decision badge */}
+      {/* Decision branch indicator */}
       {step.node === 'decision' && step.output?.decision && (
-        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold
-          ${step.output.decision === 'escalate'
-            ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-          }`}>
-          <GitBranch className="w-3 h-3" />
-          {step.output.decision === 'escalate' ? '🔴 ESCALATION PATH' : '🟢 DISPATCH PATH'}
-          <ArrowRight className="w-3 h-3" />
+        <div className={`decision-banner ${step.output.decision} mt-2`}>
+          <GitBranch className="w-4 h-4 flex-shrink-0" />
+          <div>
+            <div className="text-xs font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              {step.output.decision === 'escalate' ? '🔴 Escalation Path Selected' : '🟢 Dispatch Path Selected'}
+            </div>
+            <div className="text-[10px] mt-0.5 opacity-70">
+              {step.output.decision === 'escalate'
+                ? 'SLA breach risk + repeat failure — invoking vendor emergency escalation'
+                : 'Within SLA window — standard crew dispatch is appropriate'}
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 flex-shrink-0 ml-auto opacity-60" />
         </div>
       )}
 
-      {/* Tool Calls */}
-      {step.tool_calls && step.tool_calls.length > 0 && (
-        <div className="space-y-2 pt-1">
-          <p className="text-[10px] uppercase tracking-wider opacity-50 font-semibold">Tool Calls</p>
+      {/* Tool calls */}
+      {step.tool_calls?.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          <div className="section-label mb-1.5">Tool Calls</div>
           {step.tool_calls.map((tc, i) => (
             <ToolCallCard key={i} toolCall={tc} index={i} />
           ))}
@@ -87,12 +84,10 @@ const AgentInterface = ({ incident }) => {
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [steps, finalResult]);
 
-  const handleTriggerAgent = async () => {
+  const handleTrigger = async () => {
     if (!incident || isRunning) return;
     setIsRunning(true);
     setIsDone(false);
@@ -123,24 +118,18 @@ const AgentInterface = ({ incident }) => {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
 
-        for (const chunk of lines) {
+        for (const chunk of parts) {
           if (!chunk.startsWith('data: ')) continue;
           try {
             const parsed = JSON.parse(chunk.slice(6));
-            if (parsed.type === 'node_complete') {
-              setSteps(prev => [...prev, parsed.data]);
-            } else if (parsed.type === 'complete') {
-              setFinalResult(parsed.data);
-              setIsDone(true);
-            } else if (parsed.type === 'error') {
-              setError(parsed.data.message);
-            }
-          } catch { /* skip malformed */ }
+            if (parsed.type === 'node_complete') setSteps(p => [...p, parsed.data]);
+            else if (parsed.type === 'complete') { setFinalResult(parsed.data); setIsDone(true); }
+            else if (parsed.type === 'error') setError(parsed.data.message);
+          } catch { /* skip */ }
         }
       }
     } catch (err) {
@@ -150,154 +139,140 @@ const AgentInterface = ({ incident }) => {
     }
   };
 
-  const reset = () => {
-    setSteps([]);
-    setFinalResult(null);
-    setIsDone(false);
-    setError(null);
-  };
+  const reset = () => { setSteps([]); setFinalResult(null); setIsDone(false); setError(null); };
+
+  const totalNodes = 7;
 
   return (
-    <div className="glass-panel h-full flex flex-col overflow-hidden relative">
+    <div className="glass-panel h-full flex flex-col overflow-hidden">
 
-      {/* Header */}
-      <div className="p-4 border-b border-slate-700/50 bg-slate-800/30 flex justify-between items-center z-10 flex-shrink-0">
+      {/* ── Panel Header ── */}
+      <div className="px-5 py-3.5 flex items-center justify-between flex-shrink-0"
+           style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.015)' }}>
         <div>
-          <h2 className="font-semibold text-lg flex items-center gap-2">
-            <Bot className="w-5 h-5 text-indigo-400" />
+          <h2 className="font-semibold flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, color: 'var(--text-primary)' }}>
+            <Bot className="w-4 h-4" style={{ color: 'var(--indigo)' }} />
             Nexus AI Agent
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Multi-step • Document-grounded • Branching decisions</p>
+          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+            Multi-step · Document-grounded · Conditional branching · 5 tool calls
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           {(steps.length > 0 || isDone) && !isRunning && (
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-            >
-              Reset
+            <button onClick={reset} className="btn-ghost">
+              <RefreshCw className="w-3 h-3" /> Reset
             </button>
           )}
           <button
-            onClick={handleTriggerAgent}
-            disabled={!incident || isRunning}
             id="trigger-analysis-btn"
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg
-              ${!incident
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                : isRunning
-                  ? 'bg-indigo-600/50 text-white cursor-wait border border-indigo-500/30'
-                  : 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white hover:shadow-cyan-500/25 hover:scale-[1.02]'
-              }`}
+            onClick={handleTrigger}
+            disabled={!incident || isRunning}
+            className={`btn-primary ${isRunning ? 'loading' : ''}`}
           >
-            {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {isRunning ? `Reasoning… (${steps.length}/8)` : isDone ? 'Re-run Analysis' : 'Trigger Analysis'}
+            {isRunning
+              ? <Loader2 className="w-4 h-4 animate-spin-slow" />
+              : isDone
+                ? <RefreshCw className="w-4 h-4" />
+                : <Play className="w-4 h-4" />
+            }
+            {isRunning ? `Reasoning… (${steps.length}/${totalNodes})` : isDone ? 'Re-run Analysis' : 'Trigger Analysis'}
           </button>
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4 relative z-10">
+      {/* ── Scrollable Body ── */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
 
         {/* Empty state */}
         {!incident && steps.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
-            <Sparkles className="w-12 h-12 opacity-20" />
-            <p className="text-sm">Select an incident from the queue to begin analysis.</p>
+          <div className="h-full flex flex-col items-center justify-center gap-4" style={{ color: 'var(--text-muted)' }}>
+            <div className="p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
+              <Sparkles className="w-8 h-8 opacity-40" />
+            </div>
+            <p className="text-sm">Select an incident from the queue to begin analysis</p>
           </div>
         )}
 
         {/* Ready state */}
         {incident && steps.length === 0 && !isRunning && !isDone && (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
-            <div className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700">
-              <Bot className="w-8 h-8 text-indigo-400" />
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <div className="text-center max-w-xs">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                   style={{ background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.2)' }}>
+                <Bot className="w-7 h-7" style={{ color: 'var(--indigo)' }} />
+              </div>
+              <p className="font-semibold text-sm mb-1" style={{ fontFamily: "'Space Grotesk', sans-serif", color: 'var(--text-primary)' }}>
+                Ready to analyze <span style={{ color: 'var(--accent)' }}>{incident.tower}</span>
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                The agent will plan, retrieve documents twice, call 5 tools, make a branching decision, and produce a cited enterprise report.
+              </p>
             </div>
-            <p className="text-sm font-medium">Ready to analyze <span className="text-cyan-400">{incident.tower}</span></p>
-            <p className="text-xs text-slate-500 text-center max-w-xs">
-              The agent will plan, retrieve documents multiple times, call tools, make branching decisions, and produce an enterprise report.
-            </p>
           </div>
         )}
 
-        {/* Error state */}
+        {/* Error */}
         {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
-            <p className="font-semibold mb-1">⚠️ Agent Error</p>
+          <div className="p-4 rounded-xl text-sm" style={{ background: 'var(--danger-dim)', border: '1px solid rgba(244,63,94,0.25)', color: '#FCA5A5' }}>
+            <p className="font-semibold mb-1" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>⚠️ Agent Error</p>
             <p className="text-xs opacity-80">{error}</p>
           </div>
         )}
 
-        {/* Progress pipeline */}
+        {/* Steps */}
         {steps.length > 0 && (
-          <div>
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-              Agent Reasoning Trace — {steps.length} of 8 nodes
-            </h3>
-
-            {/* Node progress bar */}
-            <div className="flex gap-1 mb-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-1 flex-1 rounded-full transition-all duration-500 ${
-                    i < steps.length ? 'bg-gradient-to-r from-indigo-500 to-cyan-500' : 'bg-slate-800'
-                  }`}
-                />
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              {steps.map((step, i) => (
-                <AgentStep key={i} step={step} index={i} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Live pulsing indicator */}
-        {isRunning && (
-          <div className="flex items-center gap-2 text-slate-500 text-xs pl-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-            <span className="animate-pulse">Agent is reasoning…</span>
-          </div>
-        )}
-
-        {/* Final report */}
-        {isDone && finalResult && (
-          <div className="mt-2 space-y-4 animate-in fade-in zoom-in-95 duration-500">
-            {/* Decision outcome banner */}
-            <div className={`flex items-center gap-3 p-3 rounded-xl border font-semibold text-sm
-              ${finalResult.decision === 'escalate'
-                ? 'border-red-500/30 bg-red-500/10 text-red-300'
-                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-              }`}>
-              <GitBranch className="w-5 h-5" />
-              <div>
-                <p className="font-bold">
-                  {finalResult.decision === 'escalate' ? '🔴 Escalation Path Executed' : '🟢 Dispatch Path Executed'}
-                </p>
-                <p className="text-xs opacity-70 font-normal">
-                  Severity: {finalResult.severity} • Root Cause: {finalResult.predicted_cause}
-                </p>
+          <div className="space-y-3">
+            {/* Progress bar */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="section-label">Agent Reasoning Trace</span>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{steps.length}/{totalNodes} nodes</span>
+              </div>
+              <div className="agent-progress">
+                {Array.from({ length: totalNodes }).map((_, i) => (
+                  <div key={i} className={`agent-progress-segment ${i < steps.length ? 'active' : ''}`} />
+                ))}
               </div>
             </div>
 
-            {/* Document citations */}
+            {steps.map((step, i) => <AgentStep key={i} step={step} index={i} />)}
+
+            {isRunning && (
+              <div className="flex items-center gap-2 py-1 pl-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                <Loader2 className="w-3.5 h-3.5 animate-spin-slow" style={{ color: 'var(--indigo)' }} />
+                <span className="animate-pulse">Agent is reasoning…</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Final result */}
+        {isDone && finalResult && (
+          <div className="space-y-4 mt-1">
+            {/* Decision outcome banner */}
+            <div className={`decision-banner ${finalResult.decision}`}>
+              <GitBranch className="w-5 h-5 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-bold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {finalResult.decision === 'escalate' ? '🔴 Escalation Path Executed' : '🟢 Dispatch Path Executed'}
+                </div>
+                <div className="text-[11px] opacity-70 mt-0.5">
+                  Severity: {finalResult.severity} &nbsp;·&nbsp; Root Cause: {finalResult.predicted_cause}
+                </div>
+              </div>
+            </div>
+
+            {/* Citations */}
             <DocumentCitations citations={finalResult.citations} />
 
-            {/* Markdown report */}
+            {/* Report */}
             <div>
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <FileText className="w-3.5 h-3.5" /> Priority Action Report
-              </h3>
-              <div className="bg-slate-950 border border-slate-700/50 rounded-xl p-5 shadow-2xl
-                            prose prose-invert prose-slate max-w-none text-sm
-                            prose-headings:text-slate-100 prose-headings:font-bold
-                            prose-code:text-cyan-400 prose-code:bg-cyan-500/10 prose-code:px-1 prose-code:rounded
-                            prose-a:text-cyan-400 hover:prose-a:text-cyan-300
-                            prose-blockquote:border-indigo-500 prose-blockquote:text-slate-400">
+              <div className="section-label mb-3 flex items-center gap-2">
+                <FileText className="w-3 h-3" /> Priority Action Report
+              </div>
+              <div className="report-card">
                 <ReactMarkdown>{finalResult.report}</ReactMarkdown>
               </div>
             </div>
@@ -306,9 +281,6 @@ const AgentInterface = ({ incident }) => {
 
         <div ref={bottomRef} />
       </div>
-
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/3 via-transparent to-cyan-500/3 pointer-events-none" />
     </div>
   );
 };

@@ -1,93 +1,105 @@
 import React, { useState } from 'react';
-import { AlertTriangle, MapPin, RadioTower, Clock, ChevronRight, Users, Signal, Wifi } from 'lucide-react';
+import { AlertTriangle, RadioTower, Clock, ChevronRight, Users, Signal } from 'lucide-react';
 
-// Tower positions for the SVG map (percentage-based)
 const TOWER_MAP = [
-  { id: 'TOWER-42', x: 28, y: 38, status: 'critical' },
-  { id: 'TOWER-18', x: 62, y: 55, status: 'degraded' },
-  { id: 'TOWER-09', x: 72, y: 25, status: 'resolved' },
-  { id: 'TOWER-33', x: 42, y: 70, status: 'ok' },
-  { id: 'TOWER-61', x: 18, y: 65, status: 'ok' },
+  { id: 'TOWER-42', x: 28, y: 40, status: 'critical' },
+  { id: 'TOWER-18', x: 63, y: 56, status: 'degraded' },
+  { id: 'TOWER-09', x: 72, y: 22, status: 'ok' },
+  { id: 'TOWER-33', x: 42, y: 72, status: 'ok' },
+  { id: 'TOWER-61', x: 17, y: 66, status: 'ok' },
 ];
 
-const TOWER_COLORS = {
-  critical: { dot: '#ef4444', glow: 'rgba(239,68,68,0.6)', ring: '#ef4444' },
-  degraded: { dot: '#f59e0b', glow: 'rgba(245,158,11,0.5)', ring: '#f59e0b' },
-  resolved: { dot: '#10b981', glow: 'rgba(16,185,129,0.4)', ring: '#10b981' },
-  ok:       { dot: '#06b6d4', glow: 'rgba(6,182,212,0.3)', ring: '#06b6d4' },
+const TOWER_COLOR = {
+  critical: '#F43F5E',
+  degraded:  '#F59E0B',
+  ok:        '#00D4FF',
 };
 
 const Dashboard = ({ incidents, selectedIncident, onSelectIncident }) => {
-  const [hoveredTower, setHoveredTower] = useState(null);
+  const [hovered, setHovered] = useState(null);
+
+  const edges = [];
+  for (let i = 0; i < TOWER_MAP.length; i++) {
+    for (let j = i + 1; j < TOWER_MAP.length; j++) {
+      const a = TOWER_MAP[i], b = TOWER_MAP[j];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 42) edges.push({ a, b, critical: a.status === 'critical' || b.status === 'critical' });
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-5 h-full">
+    <div className="flex flex-col gap-4 h-full">
 
-      {/* Network Map */}
-      <div className="glass-panel overflow-hidden relative flex-shrink-0">
-        <div className="p-3 border-b border-slate-700/50 flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-200">
-            <RadioTower className="w-4 h-4 text-cyan-400" /> Live Network Topology
+      {/* ── Network Map ── */}
+      <div className="glass-panel overflow-hidden flex-shrink-0">
+        <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif", color: 'var(--text-primary)' }}>
+            <RadioTower className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+            Live Network Topology
           </h3>
-          <div className="flex items-center gap-3 text-[10px] text-slate-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Critical</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Degraded</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />Online</span>
+          <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#F43F5E' }} />Critical
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#F59E0B' }} />Degraded
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#00D4FF' }} />Online
+            </span>
           </div>
         </div>
 
-        {/* SVG Map */}
-        <div className="relative h-52 bg-slate-900/80">
-          {/* Grid background */}
-          <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-60" />
-          {/* Gradient scan line */}
-          <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent animate-pulse top-1/2" />
+        <div className="relative h-48" style={{ background: 'rgba(0,0,0,0.3)' }}>
+          {/* Grid */}
+          <div className="absolute inset-0"
+               style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+          {/* Radial fade */}
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, rgba(6,10,18,0.8) 100%)' }} />
 
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {/* Connection lines */}
-            {TOWER_MAP.slice(0, -1).map((t, i) => (
-              TOWER_MAP.slice(i + 1).map((t2, j) => {
-                const dist = Math.hypot(t.x - t2.x, t.y - t2.y);
-                if (dist > 40) return null;
-                return (
-                  <line key={`${t.id}-${t2.id}`}
-                    x1={t.x} y1={t.y} x2={t2.x} y2={t2.y}
-                    stroke={t.status === 'critical' || t2.status === 'critical' ? '#ef444440' : '#06b6d430'}
-                    strokeWidth="0.5" strokeDasharray="2,2"
-                  />
-                );
-              })
+            {edges.map((e, i) => (
+              <line key={i}
+                x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
+                stroke={e.critical ? 'rgba(244,63,94,0.25)' : 'rgba(0,212,255,0.12)'}
+                strokeWidth="0.4" strokeDasharray="1.5 2" />
             ))}
           </svg>
 
-          {/* Tower nodes */}
-          {TOWER_MAP.map(tower => {
-            const colors = TOWER_COLORS[tower.status];
-            const isSelected = selectedIncident?.tower === tower.id;
-            const incident = incidents.find(i => i.tower === tower.id);
+          {TOWER_MAP.map(t => {
+            const color = TOWER_COLOR[t.status];
+            const inc = incidents.find(i => i.tower === t.id);
+            const isSelected = selectedIncident?.tower === t.id;
             return (
               <div
-                key={tower.id}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-                style={{ left: `${tower.x}%`, top: `${tower.y}%` }}
-                onClick={() => incident && onSelectIncident(incident)}
-                onMouseEnter={() => setHoveredTower(tower.id)}
-                onMouseLeave={() => setHoveredTower(null)}
+                key={t.id}
+                className="absolute cursor-pointer"
+                style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}
+                onClick={() => inc && onSelectIncident(inc)}
+                onMouseEnter={() => setHovered(t.id)}
+                onMouseLeave={() => setHovered(null)}
               >
-                {tower.status === 'critical' && (
-                  <div className="absolute inset-0 w-8 h-8 -translate-x-1/4 -translate-y-1/4 rounded-full animate-ping"
-                       style={{ backgroundColor: colors.glow, opacity: 0.4 }} />
+                {/* Ping ring for critical */}
+                {t.status === 'critical' && (
+                  <div className="absolute inset-0 rounded-full animate-ping"
+                       style={{ width: 28, height: 28, top: -8, left: -8, background: `${color}20`, animationDuration: '1.5s' }} />
                 )}
-                <div className={`w-4 h-4 rounded-full border-2 relative z-10 transition-transform group-hover:scale-125
-                  ${isSelected ? 'scale-125 shadow-lg' : ''}`}
-                     style={{ backgroundColor: colors.dot, borderColor: colors.ring, boxShadow: `0 0 8px ${colors.glow}` }}>
-                </div>
+                {/* Dot */}
+                <div
+                  className="relative w-3 h-3 rounded-full transition-transform duration-150"
+                  style={{
+                    background: color,
+                    boxShadow: `0 0 ${isSelected ? 14 : 8}px ${color}`,
+                    transform: isSelected || hovered === t.id ? 'scale(1.5)' : 'scale(1)',
+                    border: isSelected ? `2px solid ${color}` : '1.5px solid rgba(255,255,255,0.3)',
+                  }}
+                />
                 {/* Tooltip */}
-                {hoveredTower === tower.id && (
-                  <div className="absolute z-20 -top-7 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 
-                                  rounded px-2 py-0.5 text-[9px] font-mono whitespace-nowrap text-slate-200 shadow-xl">
-                    {tower.id}
-                    {incident && <span className="ml-1 text-amber-400">({incident.severity})</span>}
+                {hovered === t.id && (
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded text-[10px] font-mono z-20 pointer-events-none"
+                       style={{ background: 'rgba(6,10,18,0.95)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                    {t.id}
+                    {inc && <span className="ml-1.5" style={{ color }}>{inc.severity}</span>}
                   </div>
                 )}
               </div>
@@ -96,60 +108,70 @@ const Dashboard = ({ incidents, selectedIncident, onSelectIncident }) => {
         </div>
       </div>
 
-      {/* Incident Queue */}
-      <div className="glass-panel flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="p-4 border-b border-slate-700/50 bg-slate-800/30 flex justify-between items-center flex-shrink-0">
-          <h2 className="font-semibold text-lg flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
+      {/* ── Incident Queue ── */}
+      <div className="glass-panel flex flex-col overflow-hidden flex-1 min-h-0">
+        <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0"
+             style={{ borderColor: 'var(--border-subtle)', background: 'rgba(255,255,255,0.015)' }}>
+          <h2 className="flex items-center gap-2 font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, color: 'var(--text-primary)' }}>
+            <AlertTriangle className="w-4 h-4" style={{ color: '#F59E0B' }} />
             Incident Queue
           </h2>
-          <span className="bg-red-500/20 text-red-300 border border-red-500/20 text-xs px-2 py-1 rounded-md font-medium">
+          <span className="badge badge-p0 text-[10px]">
             {incidents.filter(i => i.severity === 'P0').length} Critical
           </span>
         </div>
 
-        <div className="overflow-y-auto p-2 space-y-2 flex-1">
+        <div className="overflow-y-auto p-3 space-y-2 flex-1">
           {incidents.map(inc => {
             const isSelected = selectedIncident?.id === inc.id;
-            const severityColor =
-              inc.severity === 'P0' ? 'text-red-400 bg-red-400/10 border-red-400/30' :
-              inc.severity === 'P1' ? 'text-amber-400 bg-amber-400/10 border-amber-400/30' :
-                                      'text-slate-400 bg-slate-800 border-slate-700';
+            const severityClass = inc.severity === 'P0' ? 'p0' : inc.severity === 'P1' ? 'p1' : 'p2';
 
             return (
               <div
                 key={inc.id}
                 onClick={() => onSelectIncident(inc)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer group
-                  ${isSelected
-                    ? 'border-cyan-500/50 bg-cyan-950/30 shadow-[0_0_20px_rgba(6,182,212,0.12)]'
-                    : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-800/40'
-                  }`}
+                className={`incident-card ${severityClass} ${isSelected ? 'selected' : ''}`}
               >
-                <div className="flex justify-between items-start mb-2">
+                {/* Top row */}
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${severityColor}`}>
-                      {inc.severity}
+                    <span className={`badge badge-${inc.severity.toLowerCase()}`}>{inc.severity}</span>
+                    <span className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif", color: 'var(--text-primary)' }}>
+                      {inc.tower}
                     </span>
-                    <span className="font-mono text-sm text-slate-200 font-semibold">{inc.tower}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
+                      {inc.id}
+                    </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 flex items-center gap-1 font-mono">
-                    <Clock className="w-3 h-3" /> {inc.time}
+                  <span className="flex items-center gap-1 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                    <Clock className="w-3 h-3" />{inc.time}
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-400 mb-2 line-clamp-2">{inc.logs}</p>
+                {/* Log line */}
+                <p className="text-xs mb-3 leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                  {inc.logs}
+                </p>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-600">
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" /> {inc.affected_users?.toLocaleString()} affected
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Signal className="w-3 h-3" /> {inc.coverage}% coverage
-                  </span>
+                {/* Metrics row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, color: inc.affected_users > 0 ? '#F43F5E' : 'var(--text-muted)' }}>
+                        {inc.affected_users.toLocaleString()}
+                      </span> users
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Signal className="w-3 h-3" />
+                      <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, color: inc.coverage < 50 ? '#F59E0B' : '#10B981' }}>
+                        {inc.coverage}%
+                      </span> coverage
+                    </span>
+                  </div>
                   {isSelected && (
-                    <span className="text-cyan-400 font-medium flex items-center gap-1 animate-pulse">
-                      Selected <ChevronRight className="w-3 h-3" />
+                    <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--accent)' }}>
+                      Analyzing <ChevronRight className="w-3 h-3" />
                     </span>
                   )}
                 </div>
