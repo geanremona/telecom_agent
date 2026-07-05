@@ -4,6 +4,7 @@ import {
   AlertTriangle, Truck, CheckCircle2, ArrowRight, RefreshCw
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import ToolCallCard from './ToolCallCard';
 import DocumentCitations from './DocumentCitations';
 
@@ -100,7 +101,10 @@ const AgentInterface = ({ incident }) => {
     try {
       const response = await fetch(`${apiUrl}/api/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_API_KEY || 'nexus-hackathon-demo-key-2026'
+        },
         body: JSON.stringify({
           incident_id: incident.id,
           tower_id: incident.tower,
@@ -273,7 +277,7 @@ const AgentInterface = ({ incident }) => {
                 <FileText className="w-3 h-3" /> Priority Action Report
               </div>
               <div className="report-card">
-                <ReactMarkdown>{finalResult.report}</ReactMarkdown>
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{finalResult.report}</ReactMarkdown>
               </div>
             </div>
           </div>

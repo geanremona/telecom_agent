@@ -1,30 +1,42 @@
 import json
 import asyncio
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Depends, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi.security.api_key import APIKeyHeader
+from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
 
 from app.agent.workflow import agent_app
 
 app = FastAPI(title="Nexus Telecom Enterprise Agent API", version="2.0.0")
 
+# Security: CORS restriction
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://136.244.111.138:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Security: API Key Authentication
+API_KEY = os.getenv("API_KEY", "nexus-hackathon-demo-key-2026")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header == API_KEY:
+        return api_key_header
+    raise HTTPException(status_code=403, detail="Could not validate credentials")
+
+# Security: Input Validation
 class TriggerRequest(BaseModel):
-    incident_id: str = "INC-2026-89"
-    tower_id: str
-    event_type: str
-    logs: str
-
+    incident_id: str = Field(default="INC-2026-89", pattern=r"^INC-\d{4}-\d{2,4}$", max_length=20)
+    tower_id: str = Field(pattern=r"^TOWER-\d{2,4}$", max_length=20)
+    event_type: str = Field(max_length=50)
+    logs: str = Field(max_length=2000)
 
 # ── SSE Helper ────────────────────────────────────────────────────────────────
 def sse_event(event_type: str, data: Any) -> str:
@@ -48,7 +60,7 @@ NODE_META = {
 
 # ── STREAMING ENDPOINT ────────────────────────────────────────────────────────
 @app.post("/api/stream")
-async def stream_agent(request: TriggerRequest):
+async def stream_agent(request: TriggerRequest, api_key: str = Depends(get_api_key)):
     """
     Streams LangGraph node outputs as Server-Sent Events.
     Each node emits a structured event with its name, label, tool calls, and output.
@@ -197,7 +209,7 @@ async def stream_agent(request: TriggerRequest):
 
 # ── LEGACY SYNC ENDPOINT (kept for compatibility) ──────────────────────────────
 @app.post("/api/trigger")
-async def trigger_agent(request: TriggerRequest):
+async def trigger_agent(request: TriggerRequest, api_key: str = Depends(get_api_key)):
     initial_state = {
         "event": {
             "incident_id": request.incident_id,
@@ -228,7 +240,7 @@ async def trigger_agent(request: TriggerRequest):
 
 
 @app.get("/api/health")
-def health():
+def health(api_key: str = Depends(get_api_key)):
     return {"status": "ok", "agent": "Nexus Network Ops Agent v2.0"}
 
 
