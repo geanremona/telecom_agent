@@ -2,6 +2,7 @@ import datetime
 from typing import TypedDict, Annotated, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 import app.database.mock_data as db
+from app.agent.knowledge_base import get_sensitivity
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AGENT STATE
@@ -30,6 +31,10 @@ class AgentState(TypedDict):
     sla_doc: Optional[Dict[str, Any]]
     sla_hours: float
     sla_breach_risk: bool
+
+    # Zero-Day Threat Analysis
+    threat_tool_call: Dict[str, Any]
+    threat_analysis_result: Optional[Dict[str, Any]]
 
     # Step 5 – Decision (the branching point)
     decision: str  # "dispatch" | "escalate"
@@ -110,10 +115,6 @@ def retrieve_incidents_node(state: AgentState) -> dict:
     }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# NODE 3: ROOT CAUSE ANALYSIS
-# Uses pattern data + live symptoms to produce a root cause prediction.
-# ──────────────────────────────────────────────────────────────────────────────
 def rca_node(state: AgentState) -> dict:
     incidents = state.get("incidents", [])
     logs = state["event"].get("logs", "").lower()
@@ -122,6 +123,11 @@ def rca_node(state: AgentState) -> dict:
     predicted_cause = "Unknown"
     confidence = "Low (15%)"
     reasoning = "Insufficient data for confident RCA."
+
+    # Use RLHF Sensitivities
+    rect_sens = get_sensitivity("Faulty rectifier")
+    ant_sens = get_sensitivity("Antenna misalignment")
+    fib_sens = get_sensitivity("Physical fiber damage (excavation)")
 
     if "3/" in pattern or "pattern detected" in pattern.lower():
         # Strong historical evidence
@@ -134,20 +140,23 @@ def rca_node(state: AgentState) -> dict:
         reasoning = (
             f"Strong recurrence pattern confirms '{most_common_cause}' as the root cause. "
             f"Evidence from {len(incidents)} historical incidents at this tower. "
-            f"Current log symptoms ('voltage drop', 'battery') are consistent with this diagnosis."
         )
-    elif "voltage" in logs or "battery" in logs or "rectifier" in logs:
+    elif ("voltage" in logs or "battery" in logs or "rectifier" in logs) and rect_sens < 0.7:
         predicted_cause = "Faulty rectifier"
-        confidence = "Medium (71%)"
-        reasoning = "Current symptom keywords strongly suggest rectifier failure even without robust historical pattern."
-    elif "signal" in logs or "antenna" in logs or "fluctuation" in logs:
+        confidence = f"Medium ({int((1-rect_sens)*100)}%)"
+        reasoning = "Current symptom keywords strongly suggest rectifier failure based on RLHF sensitivity."
+    elif ("signal" in logs or "antenna" in logs or "fluctuation" in logs) and ant_sens < 0.7:
         predicted_cause = "Antenna misalignment"
-        confidence = "Medium (68%)"
-        reasoning = "Signal/RF keywords point to antenna or RF chain issue. Recommend on-site inspection."
-    elif "fiber" in logs or "backhaul" in logs:
+        confidence = f"Medium ({int((1-ant_sens)*100)}%)"
+        reasoning = "Signal/RF keywords point to antenna or RF chain issue based on RLHF sensitivity."
+    elif ("fiber" in logs or "backhaul" in logs) and fib_sens < 0.8:
         predicted_cause = "Physical fiber damage (excavation)"
-        confidence = "High (88%)"
+        confidence = f"High ({int((1-fib_sens)*100 + 10)}%)"
         reasoning = "Complete backhaul loss with fiber keywords strongly indicates physical cable damage."
+    elif "lateral movement" in logs or "unauthorized" in logs:
+        predicted_cause = "Unknown Anomaly"
+        confidence = "Low (10%)"
+        reasoning = "Unrecognized anomaly detected in logs. Routing to Threat Analysis."
 
     state["messages"].append(f"[RCA] Root cause: '{predicted_cause}' — Confidence: {confidence}. {reasoning}")
     return {
@@ -155,6 +164,45 @@ def rca_node(state: AgentState) -> dict:
         "confidence": confidence,
         "rca_reasoning": reasoning,
     }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NODE 3.5: THREAT ANALYSIS (ZERO-DAY)
+# Analyzes unknown or suspicious anomalies using Threat Intel.
+# ──────────────────────────────────────────────────────────────────────────────
+def threat_analysis_node(state: AgentState) -> dict:
+    logs = state["event"].get("logs", "").lower()
+    
+    # TOOL CALL: Query Threat Intel
+    tool_result = db.tool_query_threat_intel([logs])
+    analysis = tool_result.get("output", {})
+    
+    predicted_cause = state.get("predicted_cause", "Unknown Anomaly")
+    severity = state.get("severity", "Unknown")
+    
+    if analysis.get("match_found"):
+        reasoning = f"Threat Intel match found! {analysis.get('description')}"
+        predicted_cause = analysis.get("threat_type", "Zero-Day APT")
+        severity = analysis.get("severity_override", "CRITICAL-SEC")
+        state["messages"].append(f"[THREAT-INTEL] 🚨 ZERO-DAY DETECTED: {analysis.get('cve')} - {predicted_cause}")
+    else:
+        reasoning = "No known zero-day signatures found in Threat Intel DB. Proceeding with standard unknown fault handling."
+        state["messages"].append(f"[THREAT-INTEL] ℹ️ No match found in Threat Intel DB.")
+
+    return {
+        "threat_tool_call": tool_result,
+        "threat_analysis_result": analysis,
+        "predicted_cause": predicted_cause,
+        "severity": severity
+    }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CONDITIONAL EDGE FUNCTION (RCA to Threat Analysis or SLA)
+# ──────────────────────────────────────────────────────────────────────────────
+def route_after_rca(state: AgentState) -> str:
+    predicted_cause = state.get("predicted_cause", "")
+    if predicted_cause in ["Unknown", "Unknown Anomaly"]:
+        return "threat_analysis"
+    return "retrieve_sla"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -504,6 +552,7 @@ workflow = StateGraph(AgentState)
 workflow.add_node("triage", triage_node)
 workflow.add_node("retrieve_incidents", retrieve_incidents_node)
 workflow.add_node("rca", rca_node)
+workflow.add_node("threat_analysis", threat_analysis_node)
 workflow.add_node("retrieve_sla", retrieve_sla_node)
 workflow.add_node("decision", decision_node)
 workflow.add_node("dispatch", dispatch_node)
@@ -513,10 +562,20 @@ workflow.add_node("report", report_node)
 # Entry point
 workflow.set_entry_point("triage")
 
-# Linear edges up to the decision point
+# Linear edges
 workflow.add_edge("triage", "retrieve_incidents")
 workflow.add_edge("retrieve_incidents", "rca")
-workflow.add_edge("rca", "retrieve_sla")
+
+# Conditional edge from RCA
+workflow.add_conditional_edges(
+    "rca",
+    route_after_rca,
+    {
+        "threat_analysis": "threat_analysis",
+        "retrieve_sla": "retrieve_sla",
+    }
+)
+workflow.add_edge("threat_analysis", "retrieve_sla")
 workflow.add_edge("retrieve_sla", "decision")
 
 # CONDITIONAL EDGE: the branching decision

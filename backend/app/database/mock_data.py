@@ -249,3 +249,25 @@ def tool_escalate_to_vendor(vendor_name: str, incident_id: str, reason: str, con
         },
         "citation": f"Source: ServiceNow Escalation Engine — Ticket {ticket_id} created"
     }
+
+def tool_query_threat_intel(symptoms: List[str]) -> Dict[str, Any]:
+    """Tool: Query the global threat intelligence database for zero-day signatures."""
+    if any("lateral movement" in s.lower() or "unauthorized" in s.lower() for s in symptoms):
+        return {
+            "tool": "query_threat_intel",
+            "input": {"symptoms": symptoms},
+            "output": {
+                "match_found": True,
+                "threat_type": "Zero-Day APT",
+                "cve": "CVE-2026-UNKNOWN",
+                "description": "Lateral movement pattern matches emerging state-sponsored APT campaign targeting telecom core switches.",
+                "severity_override": "CRITICAL-SEC"
+            },
+            "citation": "Source: Global Threat Intelligence Network (GTIN) DB"
+        }
+    return {
+        "tool": "query_threat_intel",
+        "input": {"symptoms": symptoms},
+        "output": {"match_found": False},
+        "citation": "Source: Global Threat Intelligence Network (GTIN) DB"
+    }

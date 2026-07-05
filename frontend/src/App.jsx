@@ -37,6 +37,17 @@ const INCIDENTS = [
     coverage: 100,
     region: 'Zone West-C',
   },
+  {
+    id: 'INC-2026-92',
+    tower: 'TOWER-CORE',
+    status: 'Active',
+    severity: 'P0',
+    time: '15:10:00Z',
+    logs: 'SEC-WARN: Unauthorized SSH connection attempt from IP 10.4.5.6. Lateral movement patterns detected in management VLAN. Signature unknown.',
+    affected_users: 85000,
+    coverage: 95,
+    region: 'Core Switching Center',
+  },
 ];
 
 const useNetworkStats = () => {

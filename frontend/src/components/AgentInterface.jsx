@@ -12,6 +12,7 @@ const NODE_META = {
   triage:             { icon: '🔎', label: 'Triage & Severity Classification',  Icon: Zap },
   retrieve_incidents: { icon: '📂', label: 'Retrieve Incident History',          Icon: FileText },
   rca:                { icon: '🧠', label: 'Root Cause Analysis',                Icon: Bot },
+  threat_analysis:    { icon: '🛡️', label: 'Zero-Day Threat Analysis',            Icon: AlertTriangle },
   retrieve_sla:       { icon: '📄', label: 'Retrieve SLA Contract Document',     Icon: FileText },
   decision:           { icon: '⚡', label: 'Agent Decision & Path Selection',    Icon: GitBranch },
   dispatch:           { icon: '🚛', label: 'Dispatch Planning',                  Icon: Truck },
@@ -82,6 +83,7 @@ const AgentInterface = ({ incident }) => {
   const [steps, setSteps] = useState([]);
   const [finalResult, setFinalResult] = useState(null);
   const [error, setError] = useState(null);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -95,6 +97,7 @@ const AgentInterface = ({ incident }) => {
     setSteps([]);
     setFinalResult(null);
     setError(null);
+    setFeedbackSent(false);
 
     const apiUrl = import.meta.env.VITE_API_URL || 'http://136.244.111.138:8000';
 
@@ -143,7 +146,29 @@ const AgentInterface = ({ incident }) => {
     }
   };
 
-  const reset = () => { setSteps([]); setFinalResult(null); setIsDone(false); setError(null); };
+  const handleFeedback = async (action) => {
+    if (feedbackSent || !finalResult) return;
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://136.244.111.138:8000';
+      await fetch(`${apiUrl}/api/feedback`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_API_KEY || 'nexus-hackathon-demo-key-2026'
+        },
+        body: JSON.stringify({
+          incident_id: incident.id,
+          cause_key: finalResult.predicted_cause,
+          action: action
+        })
+      });
+      setFeedbackSent(true);
+    } catch (err) {
+      console.error('Feedback failed:', err);
+    }
+  };
+
+  const reset = () => { setSteps([]); setFinalResult(null); setIsDone(false); setError(null); setFeedbackSent(false); };
 
   const totalNodes = 7;
 
@@ -280,6 +305,33 @@ const AgentInterface = ({ incident }) => {
                 <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{finalResult.report}</ReactMarkdown>
               </div>
             </div>
+
+            {/* RLHF Feedback UI */}
+            <div className="pt-2">
+              {!feedbackSent ? (
+                <div className="flex flex-col gap-3 p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)' }}>
+                  <div className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif", color: 'var(--text-primary)' }}>
+                    Human-in-the-Loop Feedback
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Your feedback trains the agent's detection thresholds for future incidents.
+                  </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <button onClick={() => handleFeedback('approve')} className="btn-primary flex-1 bg-emerald-600 hover:bg-emerald-500 border-emerald-500">
+                      ✅ Approve Action
+                    </button>
+                    <button onClick={() => handleFeedback('dismiss')} className="btn-ghost flex-1 text-rose-400 hover:bg-rose-500/10">
+                      ❌ Dismiss False Positive
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 p-3 text-sm text-emerald-400 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <CheckCircle2 className="w-4 h-4" /> Agent Knowledge Base Updated
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 

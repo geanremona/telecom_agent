@@ -38,6 +38,11 @@ class TriggerRequest(BaseModel):
     event_type: str = Field(max_length=50)
     logs: str = Field(max_length=2000)
 
+class FeedbackRequest(BaseModel):
+    incident_id: str = Field(max_length=20)
+    cause_key: str = Field(max_length=50)
+    action: str = Field(pattern=r"^(approve|dismiss)$")
+
 # ── SSE Helper ────────────────────────────────────────────────────────────────
 def sse_event(event_type: str, data: Any) -> str:
     """Format a Server-Sent Event message."""
@@ -50,6 +55,7 @@ NODE_META = {
     "triage":             {"label": "Triage & Severity Classification",     "icon": "🔎"},
     "retrieve_incidents": {"label": "Retrieve Incident History",             "icon": "📂"},
     "rca":                {"label": "Root Cause Analysis",                   "icon": "🧠"},
+    "threat_analysis":    {"label": "Zero-Day Threat Analysis",              "icon": "🛡️"},
     "retrieve_sla":       {"label": "Retrieve SLA Contract Document",        "icon": "📄"},
     "decision":           {"label": "Agent Decision & Path Selection",       "icon": "⚡"},
     "dispatch":           {"label": "Dispatch Planning",                     "icon": "🚛"},
@@ -126,6 +132,15 @@ async def stream_agent(request: TriggerRequest, api_key: str = Depends(get_api_k
                             "excerpt": (
                                 list(doc["clauses"].values())[0].get("excerpt") if doc else None
                             ),
+                        })
+                    elif node_name == "threat_analysis" and node_output.get("threat_tool_call"):
+                        tc = node_output["threat_tool_call"]
+                        result = tc.get("output", {})
+                        tool_calls.append({
+                            "tool": tc.get("tool"),
+                            "input": tc.get("input"),
+                            "citation": tc.get("citation"),
+                            "output_summary": result.get("description", "No threat found") if result.get("match_found") else "Clean - No threats detected",
                         })
                     elif node_name == "dispatch":
                         if node_output.get("inventory_tool_call") and node_output["inventory_tool_call"].get("tool"):
@@ -243,6 +258,17 @@ async def trigger_agent(request: TriggerRequest, api_key: str = Depends(get_api_
 def health(api_key: str = Depends(get_api_key)):
     return {"status": "ok", "agent": "Nexus Network Ops Agent v2.0"}
 
+# ── RLHF FEEDBACK ENDPOINT ───────────────────────────────────────────────────
+from app.agent.knowledge_base import update_sensitivity, log_feedback
+
+@app.post("/api/feedback")
+def submit_feedback(request: FeedbackRequest, api_key: str = Depends(get_api_key)):
+    """
+    RLHF Loop Endpoint: Updates the agent's internal thresholds based on human feedback.
+    """
+    new_val = update_sensitivity(request.cause_key, request.action)
+    log_feedback(request.incident_id, request.cause_key, request.action)
+    return {"status": "success", "cause_key": request.cause_key, "new_sensitivity": new_val}
 
 if __name__ == "__main__":
     import uvicorn
